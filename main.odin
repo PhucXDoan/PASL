@@ -87,11 +87,11 @@ main :: proc() {
 
     score_of_statistic :: proc(statistic : ASL_Sign_Statistic, same_as_previous_sign : bool) -> f64 {
         return (
-            + (f64(statistic.first_try_count) / f64(statistic.total_attempts + 1)) * 10   // Accuracy.
-            + 1 / (time.duration_seconds(statistic.total_duration) + 0.1)          * 1000 // Reaction time.
-            + f64(statistic.total_attempts)                                        * 0.5  // Frequency.
-            + (30 if same_as_previous_sign else 0)                                        // Artifically increase score to make showing the same again sign less likely.
-        )
+            + (f64(statistic.first_try_count) / f64(statistic.total_attempts)) * 500  // Accuracy.
+            + 1 / (time.duration_seconds(statistic.total_duration) + 0.1)      * 1000 // Reaction time.
+            + f64(statistic.total_attempts)                                    * 100  // Frequency.
+            + (300 if same_as_previous_sign else 0)                                   // Artifically increase score to make showing the same again sign less likely.
+        ) if statistic.total_attempts >= 1 else 0
     }
 
 
@@ -380,13 +380,13 @@ main :: proc() {
             score : f64,
         }
 
-        total_score := 0.0
+        max_score := 0.0
 
         for statistic, asl_sign in statistics {
 
             score := score_of_statistic(statistic, false)
 
-            total_score += score
+            max_score = max(max_score, score)
 
             rows[asl_sign] = {
                 sign  = asl_sign,
@@ -414,7 +414,7 @@ main :: proc() {
                 statistic.total_attempts,
             )
 
-            for _ in 0 ..< math.round(row.score / total_score * len(statistics) * 50) {
+            for _ in 0 ..< math.round(row.score / max_score * 100) {
                 fmt.printf("#")
             }
 
