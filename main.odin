@@ -85,6 +85,15 @@ main :: proc() {
 
     }
 
+    score_of_statistic :: proc(statistic : ASL_Sign_Statistic, same_as_previous_sign : bool) -> f64 {
+        return (
+            + (f64(statistic.first_try_count) / f64(statistic.total_attempts + 1)) * 10   // Accuracy.
+            + 1 / (time.duration_seconds(statistic.total_duration) + 0.1)          * 1000 // Reaction time.
+            + f64(statistic.total_attempts)                                        * 0.5  // Frequency.
+            + (30 if same_as_previous_sign else 0)                                        // Artifically increase score to make showing the same again sign less likely.
+        )
+    }
+
 
 
     // General program state data.
@@ -210,12 +219,7 @@ main :: proc() {
             for statistic, asl_sign in statistics {
                 sample_space[asl_sign] = {
                     sign  = asl_sign,
-                    score = (
-                        + (f64(statistic.first_try_count) / f64(statistic.total_attempts + 1)) * 10  // Accuracy.
-                        + 1 / (time.duration_seconds(statistic.total_duration) + 1)            * 5   // Reaction time.
-                        + f64(statistic.total_attempts)                                        * 0.1 // Frequency.
-                        + (3 if asl_sign == program.displayed_sign else 0)                           // Artifically increase score to try to show the same again sign less.
-                    ),
+                    score = score_of_statistic(statistic, asl_sign == program.displayed_sign)
                 }
             }
 
@@ -372,21 +376,29 @@ main :: proc() {
 
         rows :  [len(statistics)]Row
         Row  :: struct {
-            sign                  : ASL_Sign,
-            average_reaction_time : f64,
+            sign  : ASL_Sign,
+            score : f64,
         }
 
+        total_score := 0.0
+
         for statistic, asl_sign in statistics {
+
+            score := score_of_statistic(statistic, false)
+
+            total_score += score
+
             rows[asl_sign] = {
-                sign                  = asl_sign,
-                average_reaction_time = time.duration_seconds(statistic.total_duration) / f64(statistic.total_attempts),
+                sign  = asl_sign,
+                score = score,
             }
+
         }
 
         slice.reverse_sort_by(
             data = rows[:],
             less = proc(i, j : Row) -> bool {
-                return i.average_reaction_time < j.average_reaction_time
+                return i.score < j.score
             },
         )
 
@@ -395,12 +407,18 @@ main :: proc() {
             statistic := statistics[row.sign]
 
             fmt.printf(
-                "[{}]    %6.3f seconds    %3.0f%% accuracy    %4d total attempts\n",
+                "[{}]    %6.3f seconds    %3.0f%% accuracy    %4d total attempts    -> ",
                 row.sign,
-                row.average_reaction_time,
+                time.duration_seconds(statistic.total_duration) / f64(statistic.total_attempts),
                 f32(statistic.first_try_count) / f32(statistic.total_attempts) * 100 if statistic.total_attempts != 0 else 0,
                 statistic.total_attempts,
             )
+
+            for _ in 0 ..< math.round(row.score / total_score * len(statistics) * 50) {
+                fmt.printf("#")
+            }
+
+            fmt.printf("\n")
 
         }
 
