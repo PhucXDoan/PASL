@@ -194,15 +194,6 @@ main :: proc() {
 
 
 
-        // Indicate outlier state.
-
-        if program.outlier {
-            program.border_color.target = raylib.YELLOW
-            program.border_color.lambda = -30
-        }
-
-
-
         // Randomize the displayed sign.
 
         if refresh_displayed_sign {
@@ -267,6 +258,17 @@ main :: proc() {
                 rand.float32_range(-3, 0),
             }
 
+        }
+
+
+
+        // Indicate outlier state.
+
+        if program.outlier {
+            program.border_color.target   = raylib.YELLOW
+            program.border_color.lambda   = -30
+            program.displayed_tint.target = raylib.WHITE
+            program.displayed_tint.lambda = -30
         }
 
 
