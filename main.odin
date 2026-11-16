@@ -19,7 +19,7 @@ main :: proc() {
     )
     defer raylib.CloseWindow()
 
-    raylib.SetTargetFPS(30)
+    raylib.SetTargetFPS(raylib.GetMonitorRefreshRate(raylib.GetCurrentMonitor()))
     raylib.SetExitKey(nil)
 
     {
