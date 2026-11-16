@@ -30,6 +30,32 @@ main :: proc() {
 
 
 
+    // MicroUI initializations.
+
+    @(static)
+    microui_context       : microui.Context
+    microui_atlas_texture : raylib.Texture
+
+    microui.init(&microui_context)
+    microui_context.text_width  = microui.default_atlas_text_width
+    microui_context.text_height = microui.default_atlas_text_height
+
+    @(static)
+    microui_atlas_pixels : [microui.DEFAULT_ATLAS_WIDTH * microui.DEFAULT_ATLAS_HEIGHT][2]u8
+    for alpha, index in microui.default_atlas_alpha {
+        microui_atlas_pixels[index] = { 0xFF, alpha }
+    }
+
+    microui_atlas_texture = raylib.LoadTextureFromImage({
+        data    = raw_data(microui_atlas_pixels[:]),
+        width   = microui.DEFAULT_ATLAS_WIDTH,
+        height  = microui.DEFAULT_ATLAS_HEIGHT,
+        mipmaps = 1,
+        format  = .UNCOMPRESSED_GRAY_ALPHA,
+    })
+
+
+
     // Assets.
 
     sprite_texture := raylib.LoadTexture("sprite.png")
@@ -121,6 +147,120 @@ main :: proc() {
 
         current_timestamp := time.now()
         frame_delta_time  := raylib.GetFrameTime()
+        mouse_position    := raylib.GetMousePosition()
+        mouse_scroll      := raylib.GetMouseWheelMove()
+
+
+
+        // Update MicroUI with user inputs.
+
+        {
+
+
+
+            // User's typing input.
+
+            {
+
+                buffer  :  [512]u8
+                builder := strings.builder_from_bytes(buffer[:])
+
+                for {
+
+                    character := raylib.GetCharPressed()
+
+                    if character == '\x00' {
+                        break
+                    }
+
+                    strings.write_rune(&builder, character)
+
+                }
+
+                microui.input_text(&microui_context, strings.to_string(builder))
+
+            }
+
+
+
+            // User's keyboard input.
+
+            for raylib_key, microui_key in ([microui.Key]raylib.KeyboardKey {
+                .SHIFT     = .LEFT_SHIFT,
+                .CTRL      = .LEFT_CONTROL,
+                .ALT       = .LEFT_ALT,
+                .BACKSPACE = .BACKSPACE,
+                .DELETE    = .DELETE,
+                .RETURN    = .ENTER,
+                .LEFT      = .LEFT,
+                .RIGHT     = .RIGHT,
+                .HOME      = .HOME,
+                .END       = .END,
+                .A         = .A,
+                .X         = .X,
+                .C         = .C,
+                .V         = .V,
+            }) {
+
+                if raylib.IsKeyPressed(raylib_key) {
+                    microui.input_key_down(&microui_context, microui_key)
+                }
+
+                if raylib.IsKeyReleased(raylib_key) {
+                    microui.input_key_up(&microui_context, microui_key)
+                }
+
+            }
+
+
+
+            // User's mouse input.
+
+            microui.input_scroll(
+                &microui_context,
+                0,
+                i32(mouse_scroll * -30), // Adjust for sensitivity.
+            )
+
+            microui.input_mouse_move(
+                &microui_context,
+                i32(mouse_position.x),
+                i32(mouse_position.y),
+            )
+
+            for raylib_mouse, microui_mouse in ([microui.Mouse]raylib.MouseButton {
+                .LEFT   = .LEFT,
+                .MIDDLE = .MIDDLE,
+                .RIGHT  = .RIGHT,
+            }) {
+
+                if raylib.IsMouseButtonPressed(raylib_mouse) {
+
+                    microui.input_mouse_down(
+                        &microui_context,
+                        i32(mouse_position.x),
+                        i32(mouse_position.y),
+                        microui_mouse,
+                    )
+
+                }
+
+                if raylib.IsMouseButtonReleased(raylib_mouse) {
+
+                    microui.input_mouse_up(
+                        &microui_context,
+                        i32(mouse_position.x),
+                        i32(mouse_position.y),
+                        microui_mouse,
+                    )
+
+                }
+
+            }
+
+
+
+        }
 
 
 
@@ -162,7 +302,8 @@ main :: proc() {
                 }
 
                 case .ESCAPE: {
-                    program.outlier = true // User indicates an outlier situation for whatever reason they may have.
+                    program.outlier                                          = true
+                    microui.get_container(&microui_context, "Settings").open = true
                 }
 
                 case raylib.KeyboardKey.A + raylib.KeyboardKey(program.displayed_sign): {
@@ -283,6 +424,39 @@ main :: proc() {
 
 
 
+        // Settings UI.
+
+        {
+
+            microui.begin(&microui_context)
+            defer microui.end(&microui_context)
+
+            if microui.begin_window(
+                &microui_context,
+                "Settings",
+                { 100, 100, 300, 200 },
+                { .CLOSED }
+            ) {
+
+                defer microui.end_window(&microui_context)
+
+                microui.layout_row(&microui_context, { -1, -1 }, 0)
+
+                microui.label(&microui_context, "what is going on?")
+
+                microui.button(&microui_context, "Button 1")
+
+                if .ACTIVE in microui.treenode(&microui_context, "Test 1b") {
+                    microui.button(&microui_context, "Button 1")
+                    microui.button(&microui_context, "Button 2")
+                }
+
+            }
+
+        }
+
+
+
         // Render.
 
         {
@@ -291,6 +465,10 @@ main :: proc() {
             defer raylib.EndDrawing()
 
             raylib.ClearBackground(raylib.BLACK)
+
+
+
+            // Displayed sign.
 
             raylib.DrawTexturePro(
                 texture = sprite_texture,
@@ -314,6 +492,10 @@ main :: proc() {
                 tint     = program.displayed_tint.actual,
             )
 
+
+
+            // Border.
+
             raylib.DrawRectangleLinesEx(
                 rec = {
                     x      = 0,
@@ -324,6 +506,10 @@ main :: proc() {
                 thick = 8,
                 color = program.border_color.actual,
             )
+
+
+
+            // User input echo.
 
             {
 
@@ -353,6 +539,123 @@ main :: proc() {
                     spacing  = spacing,
                     tint     = program.user_input_text_color.actual,
                 )
+
+            }
+
+
+
+            // MicroUI.
+
+            {
+
+                raylib.BeginScissorMode(
+                    0,
+                    0,
+                    raylib.GetScreenWidth(),
+                    raylib.GetScreenHeight(),
+                )
+                defer raylib.EndScissorMode()
+
+                rendering_command_iterator : ^microui.Command
+
+                for rendering_command in microui.next_command_iterator(&microui_context, &rendering_command_iterator) {
+
+                    switch command in rendering_command {
+
+
+
+                        case ^microui.Command_Text: {
+
+                            destination := [2]i32 {
+                                command.pos.x,
+                                command.pos.y,
+                            }
+
+                            for character in command.str {
+
+                                source := microui.default_atlas[microui.DEFAULT_ATLAS_FONT + min(int(character), 127)]
+
+                                raylib.DrawTextureRec(
+                                    microui_atlas_texture,
+                                    {
+                                        f32(source.x),
+                                        f32(source.y),
+                                        f32(source.w),
+                                        f32(source.h),
+                                    },
+                                    {
+                                        f32(destination.x),
+                                        f32(destination.y),
+                                    },
+                                    transmute(raylib.Color) command.color
+                                )
+
+                                destination.x += source.w
+
+                            }
+
+                        }
+
+
+
+                        case ^microui.Command_Rect: {
+
+                            raylib.DrawRectangle(
+                                command.rect.x,
+                                command.rect.y,
+                                command.rect.w,
+                                command.rect.h,
+                                transmute(raylib.Color) command.color,
+                            )
+
+                        }
+
+
+
+                        case ^microui.Command_Icon: {
+
+                            source := microui.default_atlas[command.id]
+
+                            raylib.DrawTextureRec(
+                                microui_atlas_texture,
+                                {
+                                    f32(source.x),
+                                    f32(source.y),
+                                    f32(source.w),
+                                    f32(source.h),
+                                },
+                                {
+                                    f32(command.rect.x + (command.rect.w - source.w) / 2),
+                                    f32(command.rect.y + (command.rect.h - source.h) / 2)
+                                },
+                                transmute(raylib.Color) command.color,
+                            )
+
+                        }
+
+
+
+                        case ^microui.Command_Clip: {
+
+                            raylib.EndScissorMode()
+
+                            raylib.BeginScissorMode(
+                                command.rect.x,
+                                command.rect.y,
+                                command.rect.w,
+                                command.rect.h,
+                            )
+
+                        }
+
+
+
+                        case ^microui.Command_Jump : panic("Invalid.")
+                        case                       : panic("Invalid.")
+
+                    }
+
+                }
 
             }
 
@@ -474,8 +777,10 @@ import "core:os"
 import "core:fmt"
 import "core:time"
 import "core:slice"
+import "core:strings"
 import "core:encoding/json"
 import "core:math"
 import "core:math/rand"
 import "core:math/linalg"
 import "vendor:raylib"
+import "vendor:microui"
