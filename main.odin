@@ -137,6 +137,7 @@ main :: proc() {
         outlier               : bool,
         user_input_text       : [32]u8,
         user_input_text_color : Spline(raylib.Color),
+        stun_time_remaining   : time.Duration,
     }
 
 
@@ -291,10 +292,6 @@ main :: proc() {
 
             key := raylib.GetKeyPressed()
 
-            if .A <= key && key <= .Z {
-                program.user_input_text[0] = 'A' + u8(key - .A)
-            }
-
             #partial switch key {
 
                 case .KEY_NULL: {
@@ -306,27 +303,38 @@ main :: proc() {
                     microui.get_container(&microui_context, "Settings").open = true
                 }
 
-                case raylib.KeyboardKey.A + raylib.KeyboardKey(program.displayed_sign): {
+                case .A ..= .Z: {
 
-                    if !program.outlier {
-                        statistics[program.displayed_sign].total_duration  += sign_display_duration
-                        statistics[program.displayed_sign].total_attempts  += 1
-                        statistics[program.displayed_sign].first_try_count += 1 if !program.made_a_mistake else 0
+                    if program.stun_time_remaining == 0 { // Make the user be in time-out for a bit before actually accepting any answer.
+
+                        program.user_input_text[0] = 'A' + u8(key - .A)
+
+                        if key == raylib.KeyboardKey.A + raylib.KeyboardKey(program.displayed_sign) {
+
+                            if !program.outlier {
+                                statistics[program.displayed_sign].total_duration  += sign_display_duration
+                                statistics[program.displayed_sign].total_attempts  += 1
+                                statistics[program.displayed_sign].first_try_count += 1 if !program.made_a_mistake else 0
+                            }
+
+                            refresh_displayed_sign        = true
+                            program.made_a_mistake        = false
+                            program.outlier               = false
+                            program.border_color          = { raylib.GREEN, raylib.BLACK, -20 }
+                            program.user_input_text_color = { raylib.GREEN, {}          , -3  }
+
+                        } else {
+
+                            program.made_a_mistake        = true
+                            program.border_color          = { raylib.RED  , raylib.BLACK, -2 }
+                            program.user_input_text_color = { raylib.RED  , {}          , -2 }
+                            program.displayed_tint        = { raylib.WHITE, raylib.WHITE,  0 }
+                            program.stun_time_remaining   = 2 * time.Second if !program.outlier else 0
+
+                        }
+
                     }
 
-                    refresh_displayed_sign        = true
-                    program.made_a_mistake        = false
-                    program.outlier               = false
-                    program.border_color          = { raylib.GREEN, raylib.BLACK, -20 }
-                    program.user_input_text_color = { raylib.GREEN, {}          , -3  }
-
-                }
-
-                case .A ..= .Z: {
-                    program.made_a_mistake        = true
-                    program.border_color          = { raylib.RED  , raylib.BLACK, -2 }
-                    program.user_input_text_color = { raylib.RED  , {}          , -2 }
-                    program.displayed_tint        = { raylib.WHITE, raylib.WHITE,  0 }
                 }
 
             }
@@ -410,6 +418,36 @@ main :: proc() {
             program.border_color.lambda   = -30
             program.displayed_tint.target = raylib.WHITE
             program.displayed_tint.lambda = -30
+            program.stun_time_remaining   = 0
+        }
+
+
+
+        // Indicate stun state.
+
+        was_stunned := program.stun_time_remaining >= 1
+
+        program.stun_time_remaining -= time.Duration(frame_delta_time * f32(time.Second))
+        program.stun_time_remaining  = max(program.stun_time_remaining, 0)
+
+        got_out_of_being_stunned := was_stunned && (program.stun_time_remaining == 0)
+
+        if got_out_of_being_stunned {
+
+            program.border_color.target          = {}
+            program.border_color.lambda          = -10
+            program.user_input_text_color.target = {}
+            program.user_input_text_color.lambda = -10
+
+        } else if was_stunned {
+
+            program.border_color.target          = raylib.ColorLerp({ 255, 0, 0, 255 }, { 100, 0, 0, 255 }, f32(math.sin(40 * time.duration_seconds(program.stun_time_remaining))))
+            program.border_color.lambda          = -30
+            program.user_input_text_color.target = program.border_color.target
+            program.user_input_text_color.lambda = -30
+            program.displayed_tint.target        = raylib.WHITE
+            program.displayed_tint.lambda        = -30
+
         }
 
 
