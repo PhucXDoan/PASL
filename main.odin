@@ -87,9 +87,9 @@ main :: proc() {
 
     score_of_statistic :: proc(statistic : ASL_Sign_Statistic, same_as_previous_sign : bool) -> f64 {
         return (
-            + (f64(statistic.first_try_count) / f64(statistic.total_attempts)) * 500  // Accuracy.
-            + 1 / (time.duration_seconds(statistic.total_duration) + 0.1)      * 1000 // Reaction time.
-            + f64(statistic.total_attempts)                                    * 100  // Frequency.
+            + (f64(statistic.first_try_count) / f64(statistic.total_attempts)) * 5000 // Accuracy.
+            + 1 / (time.duration_seconds(statistic.total_duration) + 0.1)      * 100  // Reaction time.
+            + f64(statistic.total_attempts)                                    * 5    // Frequency.
             + (300 if same_as_previous_sign else 0)                                   // Artifically increase score to make showing the same again sign less likely.
         ) if statistic.total_attempts >= 1 else 0
     }
@@ -105,6 +105,7 @@ main :: proc() {
         displayed_rotation    : Spline(f32),
         displayed_scale       : Spline(f32),
         displayed_mirrored    : bool,
+        displayed_tint        : Spline(raylib.Color),
         made_a_mistake        : bool,
         border_color          : Spline(raylib.Color),
         outlier               : bool,
@@ -182,8 +183,9 @@ main :: proc() {
 
                 case .A ..= .Z: {
                     program.made_a_mistake        = true
-                    program.border_color          = { raylib.RED, raylib.BLACK, -2 }
-                    program.user_input_text_color = { raylib.RED, {}          , -2 }
+                    program.border_color          = { raylib.RED  , raylib.BLACK, -2 }
+                    program.user_input_text_color = { raylib.RED  , {}          , -2 }
+                    program.displayed_tint        = { raylib.WHITE, raylib.WHITE,  0 }
                 }
 
             }
@@ -254,6 +256,17 @@ main :: proc() {
 
             program.displayed_mirrored = rand.int_max(2) == 0
 
+            program.displayed_tint = {
+                {
+                    u8(rand.int_range(100, 256)),
+                    u8(rand.int_range(100, 256)),
+                    u8(rand.int_range(100, 256)),
+                    255,
+                },
+                {},
+                rand.float32_range(-3, 0),
+            }
+
         }
 
 
@@ -264,6 +277,7 @@ main :: proc() {
         spline_dampen(&program.user_input_text_color, frame_delta_time)
         spline_dampen(&program.displayed_rotation   , frame_delta_time)
         spline_dampen(&program.displayed_scale      , frame_delta_time)
+        spline_dampen(&program.displayed_tint       , frame_delta_time)
 
 
 
@@ -295,7 +309,7 @@ main :: proc() {
                     WINDOW_DIMENSION_PX / 2,
                 },
                 rotation = program.displayed_rotation.actual,
-                tint     = raylib.WHITE,
+                tint     = program.displayed_tint.actual,
             )
 
             raylib.DrawRectangleLinesEx(
